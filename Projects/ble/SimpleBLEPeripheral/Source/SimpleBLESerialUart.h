@@ -8,7 +8,6 @@
 #ifndef SIMPLEBLESERIALUART_H_
 #define SIMPLEBLESERIALUART_H_
 
-
 #ifdef __cplusplus
 extern "C"
 {
@@ -42,7 +41,5 @@ void SbpHalUARTWrite(uint8 *pBuffer, uint16 length);
 #ifdef __cplusplus
 }
 #endif
-
-
 
 #endif /* SIMPLEBLESERIALUART_H_ */

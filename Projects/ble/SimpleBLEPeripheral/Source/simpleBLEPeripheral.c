@@ -136,17 +136,18 @@ static uint16 gapConnHandle;
 extern uint8 SBP_UART_STUDY_CMD;
 extern uint8 SBP_UART_STUDY_CMD_LEN;
 
-extern UartState u_state;
-extern uint8 UartBuffer[SBP_UART_RX_BUF_SIZE];
-
 /*************************************************************
  *  recv data define
  */
+extern UartState u_state;
 #define TRANSFER_DATA_SIGN 0xFE
+#define TRANSFER_DATA_SIGN_RE 0xFF
+#define UART_DATA_START_INDEX 2
+#define one_time_data_len 125
 static uint8 recv_value[254] = { 0 };
 static uint8 TRANSFER_DATA_STATE_IN = FALSE;
 static char newValueBuf[20] = { 0 };
-static uint8 data_len = 0, cur_data_len = 0, data_len_index = 0;
+static uint8 data_len = 0, cur_data_len = 0, data_len_index = 0, send_times = 0;
 
 /*********************************************************************
  * TYPEDEFS
@@ -206,14 +207,6 @@ static uint8 advertData[] = {
 
 };
 
-uint8 kkkkk[254] = { 0xE3, 0x78, 0x23, 0x74, 0x8C, 0xEF, 0x47, 0x62, 0x9B, 0x5C, 0x13, 0x5E, 0x78, 0xFC, 0x7A, 0x4F,
-		0x07, 0x44, 0x00, 0x5E, 0x37, 0x11, 0x67, 0x4E, 0x04, 0xF5, 0x23, 0x12, 0x89, 0xAE, 0x7C, 0x06, 0x0B, 0xFD,
-		0x2B, 0x1A, 0x91, 0xB6, 0x84, 0x0E, 0x13, 0x05, 0x33, 0x22, 0x99, 0xBE, 0x8C, 0x16, 0x1B, 0x0D, 0x3B, 0x2A,
-		0xA1, 0xC6, 0x94, 0x1E, 0x23, 0x15, 0x43, 0x32, 0xA9, 0xCE, 0x9C, 0x26, 0x2B, 0x1D, 0x4B, 0x3A, 0xB1, 0xD6,
-		0x79, 0x12, 0x16, 0x07, 0x35, 0x33, 0xA9, 0xCD, 0x99, 0x12, 0x16, 0x07, 0x35, 0x33, 0xA9, 0xCD, 0x99, 0x12,
-		0x16, 0x07, 0x35, 0x33, 0xA9, 0xCD, 0x99, 0x22, 0x27, 0x18, 0x35, 0x23, 0x98, 0xBC, 0x99, 0x13, 0x26, 0x07,
-		0x45, 0x32, 0x99, 0xCD, 0x8A, 0x13, 0x17, 0x08, 0x44, 0x32, 0xA8, 0xCC, 0x8B, 0x50, 0x80 };
-
 // GAP GATT Attributes
 static uint8 attDeviceName[GAP_DEVICE_NAME_LEN] = "zekezang";
 
@@ -229,7 +222,6 @@ static void simpleBLEPeripheral_HandleKeys(uint8 shift, uint8 keys);
 static void simpleBLEPeripheralPairStateCB(uint16 connHandle, uint8 state, uint8 status);
 static char *bdAddr2Str(uint8 *pAddr);
 //static void updateDeviceName(char *name, uint8 len);
-static void sendIRData();
 /*********************************************************************
  * PROFILE CALLBACKS
  */
@@ -284,29 +276,30 @@ static void simpleBLEPeripheralPairStateCB(uint16 connHandle, uint8 state, uint8
  }
  */
 
-static uint32 passs = 0;
 /*********************************************************************
  * @fn      readWriteFlash
  * @brief   readWriteFlash
  * @return  none
+
+ static uint32 passs = 0;
+ static void readWriteFlash() {
+ uint8 * aa;
+ aa = osal_msg_allocate(15);
+ osal_memset(aa, 0, 15);
+ osal_memcpy(aa, "as", 2);
+ uint16 p = 1234;
+ if (osal_snv_write(0xE0, sizeof(uint16), &p) == SUCCESS) {
+ HalLcdWriteString("write ok", HAL_LCD_LINE_2);
+ }
+ osal_msg_deallocate(aa);
+ uint8 bb[15] = { 0x0 };
+ uint16 bb = 0;
+ if (osal_snv_read(0xE0, 15, &bb) == SUCCESS) {
+ HalLcdWriteString("read ok", HAL_LCD_LINE_2);
+ passs = bb;
+ }
+ }
  */
-static void readWriteFlash() {
-//	uint8 * aa;
-//	aa = osal_msg_allocate(15);
-//	osal_memset(aa, 0, 15);
-//	osal_memcpy(aa, "as", 2);
-//	uint16 p = 1234;
-//	if (osal_snv_write(0xE0, sizeof(uint16), &p) == SUCCESS) {
-//		HalLcdWriteString("write ok", HAL_LCD_LINE_2);
-//	}
-//	osal_msg_deallocate(aa);
-//	uint8 bb[15] = { 0x0 };
-//	uint16 bb = 0;
-//	if (osal_snv_read(0xE0, 15, &bb) == SUCCESS) {
-//		HalLcdWriteString("read ok", HAL_LCD_LINE_2);
-//		passs = bb;
-//	}
-}
 
 /*********************************************************************
  * PUBLIC FUNCTIONS
@@ -502,7 +495,6 @@ uint16 SimpleBLEPeripheral_ProcessEvent(uint8 task_id, uint16 events) {
 	}
 
 	if (events & SBP_SEND_IRDATA_EVT) {
-		sendIRData();
 		HalLcdWriteString("send plan complete...", HAL_LCD_LINE_4);
 		return (events ^ SBP_SEND_IRDATA_EVT);
 	}
@@ -545,7 +537,6 @@ static void simpleBLEPeripheral_HandleKeys(uint8 shift, uint8 keys) {
 	}
 
 	if (keys & HAL_KEY_LEFT) {
-		sendIRData();
 	}
 
 	if (keys & HAL_KEY_DOWN) {
@@ -554,24 +545,9 @@ static void simpleBLEPeripheral_HandleKeys(uint8 shift, uint8 keys) {
 	}
 
 	if (keys & HAL_KEY_RIGHT) {
-//		HalLcdWriteString("send after 5s...", HAL_LCD_LINE_4);
-//		osal_start_timerEx(simpleBLEPeripheral_TaskID, SBP_SEND_IRDATA_EVT, 5000);
-//		uint8 initial_advertising_enable = FALSE;
-//		GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8), &initial_advertising_enable);
 		HalLcdWriteStringValue("data_len:", data_len, 10, HAL_LCD_LINE_2);
 	}
 
-}
-
-static void sendIRData() {
-	if (u_state != IR_DATA_SEND_BEGIN_STATE) {
-		u_state = IR_DATA_SEND_BEGIN_STATE;
-//		uint8 kkkkk[255];
-//		osal_memset(kkkkk, 0, 255);
-//		kkkkk[0] = 0xE3;
-//		osal_memcpy(kkkkk + 1, UartBuffer, 120);
-		SbpHalUARTWrite(kkkkk, 121);
-	}
 }
 
 /*********************************************************************
@@ -693,34 +669,23 @@ static void performPeriodicTask(void) {
 
 /*********************************************************************
  * @fn      simpleProfileChangeCB
- *
  * @brief   Callback from SimpleBLEProfile indicating a value change
- *
  * @param   paramID - parameter ID of the value that was changed.
  *
  * @return  none
  */
-static uint8 send_times = 0;
-#define one_time_data_len 125
 static void simpleProfileChangeCB(uint8 paramID) {
-	//UART_HAL_DELAY(1000);
 	osal_memset(newValueBuf, 0, 20);
 	switch (paramID) {
 	case SIMPLEPROFILE_CHAR1:
 		SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR1, newValueBuf);
 
-		//HalLcdWriteStringValue("newValueBuf[0]:", newValueBuf[0], 16, HAL_LCD_LINE_7);
+		if ((newValueBuf[0] == TRANSFER_DATA_SIGN) && (newValueBuf[1] == TRANSFER_DATA_SIGN_RE)) {
+			TRANSFER_DATA_STATE_IN = FALSE;
+		}
 
-		//UART_HAL_DELAY(10000);
-//		if (newValueBuf[0] == 0xFE) {
-//			if (u_state != IR_DATA_SEND_BEGIN_STATE) {
-//				u_state = IR_DATA_SEND_BEGIN_STATE;
-//				SbpHalUARTWrite(kkkkk, 121);
-//			}
-//		}
-
-		if ((newValueBuf[0] == TRANSFER_DATA_SIGN) && (newValueBuf[1] != 0) && (!TRANSFER_DATA_STATE_IN)) {
-			data_len = newValueBuf[1];
+		if ((newValueBuf[2] != 0) && (!TRANSFER_DATA_STATE_IN)) {
+			data_len = newValueBuf[UART_DATA_START_INDEX];
 			TRANSFER_DATA_STATE_IN = TRUE;
 			data_len_index = 0;
 			osal_memset(recv_value, 0, data_len);
@@ -732,30 +697,31 @@ static void simpleProfileChangeCB(uint8 paramID) {
 			osal_memcpy((recv_value + data_len_index), newValueBuf, cur_data_len);
 			data_len_index += cur_data_len;
 
-			if ((data_len_index - send_times * one_time_data_len - 1) >= one_time_data_len) {
+			if ((data_len_index - send_times * one_time_data_len - UART_DATA_START_INDEX) >= one_time_data_len) {
 				if (send_times == 0) {
-					recv_value[1] = 0xE3;
-					//if (u_state != IR_DATA_SEND_BEGIN_STATE) {
-					//u_state = IR_DATA_SEND_BEGIN_STATE;
-					SbpHalUARTWrite(recv_value + 1, one_time_data_len);
-					//}
+					recv_value[UART_DATA_START_INDEX] = 0xE3;
+					if (u_state != IR_DATA_SEND_BEGIN_STATE) {
+						u_state = IR_DATA_SEND_BEGIN_STATE;
+						SbpHalUARTWrite(recv_value + UART_DATA_START_INDEX, one_time_data_len);
+					}
 				} else {
-					SbpHalUARTWrite(recv_value + 1 + send_times * one_time_data_len, one_time_data_len);
+					SbpHalUARTWrite(recv_value + UART_DATA_START_INDEX + send_times * one_time_data_len,
+							one_time_data_len);
 				}
 				send_times++;
 			} else if ((send_times > 0) && ((data_len_index - send_times * one_time_data_len) < one_time_data_len)
 					&& (data_len_index == data_len)) {
 
-				SbpHalUARTWrite(recv_value + 1 + send_times * one_time_data_len,
-						data_len - send_times * one_time_data_len - 1);
+				SbpHalUARTWrite(recv_value + UART_DATA_START_INDEX + send_times * one_time_data_len,
+						data_len - send_times * one_time_data_len - UART_DATA_START_INDEX);
 				send_times++;
 
 			} else if ((send_times == 0) && (data_len < one_time_data_len) && (data_len_index == data_len)) {
-				recv_value[1] = 0xE3;
-				//if (u_state != IR_DATA_SEND_BEGIN_STATE) {
-				//u_state = IR_DATA_SEND_BEGIN_STATE;
-				SbpHalUARTWrite(recv_value + 1, data_len - 1);
-				//}
+				recv_value[UART_DATA_START_INDEX] = 0xE3;
+				if (u_state != IR_DATA_SEND_BEGIN_STATE) {
+					u_state = IR_DATA_SEND_BEGIN_STATE;
+					SbpHalUARTWrite(recv_value + UART_DATA_START_INDEX, data_len - UART_DATA_START_INDEX);
+				}
 			} else {
 
 			}
@@ -765,7 +731,7 @@ static void simpleProfileChangeCB(uint8 paramID) {
 
 		if (data_len_index == data_len) {
 			TRANSFER_DATA_STATE_IN = FALSE;
-			HalLcdWriteStringValue("data_len:", osal_strlen(recv_value), 10, HAL_LCD_LINE_6);
+			HalLcdWriteStringValue("data_len:", osal_strlen((char *)recv_value), 10, HAL_LCD_LINE_6);
 			send_times = 0;
 			data_len = 0;
 			cur_data_len = 0;
